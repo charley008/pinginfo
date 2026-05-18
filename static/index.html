@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PingInfo</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-icon">
+            <i></i><i></i><i></i>
+          </span>
+          <div>
+            <strong>PingInfo</strong>
+            <small>Network Monitor</small>
+          </div>
+        </div>
+
+        <button id="addTargetBtn" class="primary-action" type="button">添加目标</button>
+
+        <section class="side-section">
+          <div class="section-title">状态</div>
+          <div class="stat-list">
+            <div><span class="state-dot state-healthy"></span>在线 <strong id="healthyCount">0</strong></div>
+            <div><span class="state-dot state-warning"></span>告警 <strong id="warningCount">0</strong></div>
+            <div><span class="state-dot state-down"></span>离线 <strong id="downCount">0</strong></div>
+            <div><span class="state-dot state-disabled"></span>禁用 <strong id="disabledCount">0</strong></div>
+          </div>
+        </section>
+
+        <section class="side-section">
+          <div class="section-title">默认设置</div>
+          <div class="setting-card">
+            <span id="defaultsHint">间隔 1000 ms<br>超时 1000 ms</span>
+            <button id="settingsBtn" type="button">修改</button>
+          </div>
+        </section>
+
+        <section class="side-section">
+          <div class="section-title">操作</div>
+          <div class="side-actions">
+            <button id="listBtn" type="button">编辑地址列表</button>
+            <button id="editSelectedBtn" type="button">编辑选中</button>
+            <button id="startSelectedBtn" type="button">启用</button>
+            <button id="stopSelectedBtn" type="button">禁用</button>
+            <button id="clearDataSelectedBtn" type="button">清空数据</button>
+            <button id="deleteSelectedBtn" type="button">删除</button>
+          </div>
+        </section>
+
+        <div class="sidebar-version">
+          <span id="appVersion">版本 --</span>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <h1>主机监控</h1>
+            <p>ICMP/TCP 探测，默认 1 秒刷新，原始数据保留 30 天。</p>
+          </div>
+          <div class="topbar-actions">
+            <input id="filterInput" type="search" placeholder="筛选主机、IP、类型">
+            <button id="refreshBtn" type="button">刷新</button>
+          </div>
+        </header>
+
+        <section class="content-grid">
+          <div class="panel monitor-panel">
+            <div class="panel-header">
+              <strong>目标列表</strong>
+              <span id="summary">0 个目标</span>
+            </div>
+            <div class="table-pane">
+              <table class="grid" id="targetsTable">
+                <thead>
+                  <tr>
+                    <th>序号</th>
+                    <th>主机名</th>
+                    <th>IP/主机</th>
+                    <th>类型</th>
+                    <th>成功</th>
+                    <th>失败</th>
+                    <th>最后 Ping</th>
+                    <th>平均 Ping</th>
+                    <th>失败率</th>
+                    <th>连续失败</th>
+                    <th>最小</th>
+                    <th>最大</th>
+                    <th>最后失败</th>
+                  </tr>
+                </thead>
+                <tbody id="targetsBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="splitter" class="splitter" role="separator" aria-orientation="horizontal" title="拖动调整上下区域"></div>
+
+          <div class="details-row">
+            <div class="panel history-panel">
+              <div class="panel-header">
+                <strong>最近记录</strong>
+                <span id="selectedLabel">未选择目标</span>
+              </div>
+              <div class="history-pane">
+                <table class="grid history-grid">
+                  <thead>
+                    <tr>
+                      <th>发起时间</th>
+                      <th>响应 IP</th>
+                      <th>Ping 时间</th>
+                      <th>TTL</th>
+                      <th>状态</th>
+                      <th>错误</th>
+                    </tr>
+                  </thead>
+                  <tbody id="resultsBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div id="detailsSplitter" class="details-splitter" role="separator" aria-orientation="vertical" title="拖动调整记录和图表宽度"></div>
+            <aside class="panel chart-pane">
+              <div class="panel-header">
+                <strong>最近结果</strong>
+                <div class="chart-tools">
+                  <div class="chart-range-group" role="group" aria-label="图表时间窗口">
+                    <button class="chart-range-btn" type="button" data-range-minutes="10">10 分钟</button>
+                    <button class="chart-range-btn" type="button" data-range-minutes="30">30 分钟</button>
+                    <button class="chart-range-btn" type="button" data-range-minutes="60">1 小时</button>
+                    <button class="chart-range-btn" type="button" data-range-minutes="360">6 小时</button>
+                    <button class="chart-range-btn" type="button" data-range-minutes="1440">24 小时</button>
+                  </div>
+                  <span id="chartInfo">最近 10 分钟</span>
+                  <button id="chartLatestBtn" type="button" hidden>回到最新</button>
+                </div>
+              </div>
+              <div class="chart-wrap">
+                <canvas id="latencyChart"></canvas>
+                <div id="chartTooltip" class="chart-tooltip" hidden></div>
+              </div>
+              <div id="failureSummary" class="failure-summary"></div>
+              <div class="legend">
+                <span><i class="bar-ok"></i>成功</span>
+                <span><i class="bar-bad"></i>失败</span>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <footer class="statusbar">
+          <span id="connection">连接中...</span>
+          <span>SQLite · 本地存储</span>
+        </footer>
+      </main>
+    </div>
+
+    <dialog id="targetDialog" class="dialog">
+      <form id="targetForm" method="dialog" class="dialog-form">
+        <header>
+          <strong id="targetDialogTitle">添加目标</strong>
+          <button type="button" class="icon-button" data-close-dialog="targetDialog">×</button>
+        </header>
+        <label>名称<input name="name" required></label>
+        <label>主机或 IP<input name="host" required></label>
+        <div class="form-row">
+          <label>类型
+            <select name="probe_type">
+              <option value="icmp">ICMP</option>
+              <option value="tcp">TCP</option>
+            </select>
+          </label>
+          <label>端口<input name="port" type="number" min="1" max="65535"></label>
+        </div>
+        <div class="form-row">
+          <label>间隔(ms)<input name="interval_ms" type="number" min="250" value="1000"></label>
+          <label>超时(ms)<input name="timeout_ms" type="number" min="1" value="1000"></label>
+        </div>
+        <footer>
+          <button type="button" data-close-dialog="targetDialog">取消</button>
+          <button id="saveTargetBtn" type="submit">保存</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="settingsDialog" class="dialog">
+      <form id="settingsForm" method="dialog" class="dialog-form">
+        <header>
+          <strong>Ping 设置</strong>
+          <button type="button" class="icon-button" data-close-dialog="settingsDialog">×</button>
+        </header>
+        <div class="form-row">
+          <label>默认间隔(ms)<input name="default_interval_ms" type="number" min="250" value="1000"></label>
+          <label>默认超时(ms)<input name="default_timeout_ms" type="number" min="1" value="1000"></label>
+        </div>
+        <label>图表窗口<input value="支持 10 分钟到 24 小时，按真实时间轴显示，可左右拖动" disabled></label>
+        <label>原始数据保留天数<input name="retention_days" type="number" min="1" value="30" disabled></label>
+        <p class="dialog-note">Ping 间隔控制实际探测频率；图表展示真实 probe 结果，不再用分钟平均值替代。</p>
+        <footer>
+          <button type="button" data-close-dialog="settingsDialog">取消</button>
+          <button type="submit">保存设置</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="listDialog" class="dialog list-dialog">
+      <form id="listForm" method="dialog" class="dialog-form">
+        <header>
+          <strong>编辑地址列表</strong>
+          <button type="button" class="icon-button" data-close-dialog="listDialog">×</button>
+        </header>
+        <textarea id="targetsText" spellcheck="false" placeholder="每行一个目标，例如：
+223.5.5.5
+192.168.1.1
+www.qq.com
+example.com:443"></textarea>
+        <p class="dialog-note">不带端口按 ICMP 添加，带端口按 TCP 添加。保存会一次性提交整批地址并同时启动监控；已存在的地址会自动跳过。</p>
+        <footer>
+          <button type="button" data-close-dialog="listDialog">取消</button>
+          <button type="submit">保存列表</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

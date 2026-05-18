@@ -1,0 +1,187 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  BINARY_NAME: pinginfo
+  DOCKER_IMAGE: charley008/pinginfo
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run tests
+        run: cargo test --locked
+
+      - name: Run cargo check
+        run: cargo check --locked
+
+      - name: Check frontend script
+        run: node --check static/app.js
+
+  binaries:
+    name: ${{ matrix.name }}
+    needs: verify
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            binary: pinginfo
+            archive_format: tar.gz
+            use_cross: true
+          - name: linux-aarch64
+            runner: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            binary: pinginfo
+            archive_format: tar.gz
+            use_cross: true
+          - name: windows-x86_64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary: pinginfo.exe
+            archive_format: zip
+            use_cross: false
+          - name: macos-aarch64
+            runner: macos-14
+            target: aarch64-apple-darwin
+            binary: pinginfo
+            archive_format: tar.gz
+            use_cross: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.use_cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Build release binary
+        shell: bash
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --locked --release --target "${{ matrix.target }}"
+          else
+            cargo build --locked --release --target "${{ matrix.target }}"
+          fi
+
+      - name: Package release archive
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          PACKAGE_NAME="pinginfo-${VERSION}-${{ matrix.name }}"
+          PACKAGE_DIR="dist/${PACKAGE_NAME}"
+          mkdir -p "${PACKAGE_DIR}"
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" "${PACKAGE_DIR}/"
+          cp -r static "${PACKAGE_DIR}/static"
+          echo "${PACKAGE_NAME}" > dist/package_name.txt
+          python - <<'PY'
+          import os
+          import pathlib
+          import tarfile
+          import zipfile
+
+          package_name = pathlib.Path("dist/package_name.txt").read_text().strip()
+          archive_format = os.environ["ARCHIVE_FORMAT"]
+          root = pathlib.Path("dist")
+          package_dir = root / package_name
+          if archive_format == "zip":
+              archive_path = root / f"{package_name}.zip"
+              with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                  for path in package_dir.rglob("*"):
+                      zf.write(path, path.relative_to(root))
+          else:
+              archive_path = root / f"{package_name}.tar.gz"
+              with tarfile.open(archive_path, "w:gz") as tf:
+                  tf.add(package_dir, arcname=package_name)
+          print(archive_path)
+          PY
+        env:
+          ARCHIVE_FORMAT: ${{ matrix.archive_format }}
+
+      - name: Upload archive artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+
+  release:
+    needs: binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+          generate_release_notes: true
+
+  docker:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_IMAGE }}
+          tags: |
+            type=raw,value=latest
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

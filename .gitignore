@@ -1,0 +1,28 @@
+/target/
+/data/
+
+# Runtime logs and temp files
+*.log
+*.pid
+*.tmp
+*.bak
+
+# Local databases and sidecar files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local environment overrides
+.env
+.env.*
+PROJECT_LOG.md
+HANDOFF_WSL2.md
+docker_readme.md

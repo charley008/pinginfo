@@ -1,0 +1,14 @@
+.git
+.github
+target
+data
+*.log
+*.pid
+*.tmp
+*.bak
+.env
+.env.*
+.vscode
+.idea
+Thumbs.db
+.DS_Store
